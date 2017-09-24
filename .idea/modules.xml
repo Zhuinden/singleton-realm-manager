@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/RealmManager.iml" filepath="$PROJECT_DIR$/RealmManager.iml" />
+      <module fileurl="file://$PROJECT_DIR$/realm-manager/realm-manager.iml" filepath="$PROJECT_DIR$/realm-manager/realm-manager.iml" />
+      <module fileurl="file://$PROJECT_DIR$/realm-manager-example/realm-manager-example.iml" filepath="$PROJECT_DIR$/realm-manager-example/realm-manager-example.iml" />
+    </modules>
+  </component>
+</project>
