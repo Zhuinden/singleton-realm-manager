@@ -15,8 +15,6 @@
  */
 package com.zhuinden.realmmanagerexample.automigration;
 
-import android.support.annotation.NonNull;
-
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -42,26 +40,39 @@ import io.realm.RealmResults;
 import io.realm.RealmSchema;
 
 /**
+ * This migration attempts to migrate the Realm schema from one version to the current models provided in the configuration.
+ *
+ * In case of mismatch, fields defined only in schema but not in model are removed, and fields defined only in model but not in schema are added.
+ *
+ * To properly handle `@Index`, `@Required`, `@PrimaryKey` annotations, you must specify {@link MigratedField} with the specified FieldAttributes.
+ *
+ * To properly handle `@Ignore`, you must specify {@link MigrationIgnore}.
+ *
+ * To add `RealmList` field, you must specify {@link MigratedLink} on that field with the link type.
+ *
  * Requires:
  * -keepnames public class * extends io.realm.RealmObject
  * -keep public class * extends io.realm.RealmObject { *; }
+ * -keepattributes *Annotation*
  */
 public class AutoMigration
         implements RealmMigration {
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public @interface MigrationIgnore {
+    }
+
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
     public @interface MigratedField {
         FieldAttribute[] fieldAttributes();
     }
 
-    /*
-        // TODO: RealmList<T>
-        @Retention(RetentionPolicy.RUNTIME)
-        @Target(ElementType.FIELD)
-        public @interface MigratedLink {
-            Class<? extends RealmModel> linkType(); // RealmList<T extends RealmModel> is nice, but T cannot be obtained through reflection.
-        }
-     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public @interface MigratedLink {
+        Class<? extends RealmModel> linkType(); // RealmList<T extends RealmModel> is nice, but T cannot be obtained through reflection.
+    }
 
     @Override
     public int hashCode() {
@@ -74,7 +85,7 @@ public class AutoMigration
     }
 
     @Override
-    public void migrate(@NonNull DynamicRealm realm, long oldVersion, long newVersion) {
+    public void migrate(DynamicRealm realm, long oldVersion, long newVersion) {
         RealmConfiguration realmConfiguration = realm.getConfiguration();
 
         Set<Class<? extends RealmModel>> latestRealmObjectClasses = realmConfiguration.getRealmObjectClasses();
@@ -149,7 +160,9 @@ public class AutoMigration
             if(Modifier.isTransient(field.getModifiers())) { // transient fields are ignored.
                 continue;
             }
-            // TODO: ensure that @Ignore is ignored.
+            if(field.isAnnotationPresent(MigrationIgnore.class)) {
+                continue; // manual ignore.
+            }
             if(!schemaFieldNames.contains(modelFieldName)) {
                 // the schema does not contain the model's field, we must add this according to type!
                 Class<?> fieldType = field.getType();
@@ -161,8 +174,18 @@ public class AutoMigration
                         //noinspection UnnecessaryContinue
                         continue;
                     } else if(fieldType == RealmList.class) {
-                        // TODO: RealmList<T>
-                        //throw new UnsupportedOperationException("RealmList<T> field [" + modelFieldName + " :: " + field.getName() + " ] is not yet supported by auto-migration.");
+                        // TODO: value lists in 4.0.0!
+                        MigratedLink migratedLink = field.getAnnotation(MigratedLink.class);
+                        if(migratedLink == null) {
+                            throw new IllegalStateException("Link list [" + field.getName() + "] cannot be added to the schema without @MigratedLink(linkType) annotation.");
+                        }
+                        Class<? extends RealmModel> linkObjectClass = migratedLink.linkType();
+                        String linkedObjectName = linkObjectClass.getSimpleName();
+                        RealmObjectSchema linkedObjectSchema = realmSchema.get(linkedObjectName);
+                        if(linkedObjectSchema == null) {
+                            throw new IllegalStateException("The object schema [" + linkedObjectName + "] defined by link [" + modelFieldName + "] was not found in the schema!");
+                        }
+                        objectSchema.addRealmListField(field.getName(), linkedObjectSchema);
                     } else {
                         if(!RealmModel.class.isAssignableFrom(fieldType)) {
                             continue; // this is most likely an @Ignore field, let's just ignore it
