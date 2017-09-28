@@ -168,7 +168,6 @@ public class AutoMigration
                 // the schema does not contain the model's field, we must add this according to type!
                 if(isNonNullPrimitive(fieldType) || isPrimitiveObjectWrapper(fieldType) || isFieldRegularObjectType(fieldType)) {
                     objectSchema.addField(modelFieldName, fieldType);
-                    matchMigratedField(objectSchema, modelFieldName, field);
                 } else {
                     if(fieldType == RealmResults.class) { // computed field (like @LinkingObjects), so this should be ignored.
                         //noinspection UnnecessaryContinue
@@ -198,10 +197,10 @@ public class AutoMigration
                         objectSchema.addRealmObjectField(field.getName(), linkedObjectSchema);
                     }
                 }
-            } else { // even if it's added, its attributes might be mismatched!
-                if(isNonNullPrimitive(fieldType) || isPrimitiveObjectWrapper(fieldType) || isFieldRegularObjectType(fieldType)) {
-                    matchMigratedField(objectSchema, modelFieldName, field);
-                }
+            }
+            // even if it's added, its attributes might be mismatched! This must happen both if newly added, or if already exists.
+            if(isNonNullPrimitive(fieldType) || isPrimitiveObjectWrapper(fieldType) || isFieldRegularObjectType(fieldType)) {
+                matchMigratedField(objectSchema, modelFieldName, field);
             }
         }
     }
