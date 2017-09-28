@@ -224,7 +224,9 @@ public class AutoMigration
                 objectSchema.removeIndex(modelFieldName);
             }
             if(isNonNullPrimitive(field.getType())) {
-                objectSchema.setNullable(modelFieldName, false);
+                if(!objectSchema.isRequired(modelFieldName)) {
+                    objectSchema.setNullable(modelFieldName, false);
+                }
             } else {
                 if(isRequired && objectSchema.isNullable(modelFieldName)) {
                     objectSchema.setNullable(modelFieldName, false);
