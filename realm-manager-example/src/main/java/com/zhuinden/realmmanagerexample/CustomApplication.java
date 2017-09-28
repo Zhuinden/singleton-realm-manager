@@ -18,7 +18,7 @@ public class CustomApplication
         super.onCreate();
         Realm.init(this);
         Realm.setDefaultConfiguration(new RealmConfiguration.Builder() //
-                .schemaVersion(6) //
+                .schemaVersion(11) //
                 .migration(new AutoMigration()) //
                 .initialData(realm -> {
                     Cat cat = new Cat();

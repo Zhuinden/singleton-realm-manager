@@ -163,9 +163,9 @@ public class AutoMigration
             if(field.isAnnotationPresent(MigrationIgnore.class)) {
                 continue; // manual ignore.
             }
+            Class<?> fieldType = field.getType();
             if(!schemaFieldNames.contains(modelFieldName)) {
                 // the schema does not contain the model's field, we must add this according to type!
-                Class<?> fieldType = field.getType();
                 if(isNonNullPrimitive(fieldType) || isPrimitiveObjectWrapper(fieldType) || isFieldRegularObjectType(fieldType)) {
                     objectSchema.addField(modelFieldName, fieldType);
                     matchMigratedField(objectSchema, modelFieldName, field);
@@ -198,6 +198,10 @@ public class AutoMigration
                         objectSchema.addRealmObjectField(field.getName(), linkedObjectSchema);
                     }
                 }
+            } else { // even if it's added, its attributes might be mismatched!
+                if(isNonNullPrimitive(fieldType) || isPrimitiveObjectWrapper(fieldType) || isFieldRegularObjectType(fieldType)) {
+                    matchMigratedField(objectSchema, modelFieldName, field);
+                }
             }
         }
     }
@@ -217,10 +221,10 @@ public class AutoMigration
                     isPrimaryKey = true;
                 }
             }
-            if(isIndexed && !objectSchema.hasIndex(modelFieldName)) {
+            if((isIndexed || isPrimaryKey) && !objectSchema.hasIndex(modelFieldName)) {
                 objectSchema.addIndex(modelFieldName);
             }
-            if(!isIndexed && objectSchema.hasIndex(modelFieldName)) {
+            if(!isIndexed && !isPrimaryKey /* primary key is indexed by default! */ && objectSchema.hasIndex(modelFieldName)) {
                 objectSchema.removeIndex(modelFieldName);
             }
             if(isNonNullPrimitive(field.getType())) {

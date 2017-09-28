@@ -16,7 +16,7 @@ public class Dog
         extends RealmObject {
     @PrimaryKey
     @AutoMigration.MigratedField(fieldAttributes = {FieldAttribute.PRIMARY_KEY})
-    private long id;
+    private Long id;
 
     @Index
     @AutoMigration.MigratedField(fieldAttributes = {FieldAttribute.INDEXED})
