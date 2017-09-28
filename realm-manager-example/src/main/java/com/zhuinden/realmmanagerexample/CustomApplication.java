@@ -2,6 +2,8 @@ package com.zhuinden.realmmanagerexample;
 
 import android.app.Application;
 
+import com.zhuinden.realmmanagerexample.automigration.AutoMigration;
+
 import io.realm.Realm;
 import io.realm.RealmConfiguration;
 
@@ -16,7 +18,8 @@ public class CustomApplication
         super.onCreate();
         Realm.init(this);
         Realm.setDefaultConfiguration(new RealmConfiguration.Builder()
-                .deleteRealmIfMigrationNeeded()
+                //.deleteRealmIfMigrationNeeded()
+                .schemaVersion(2).migration(new AutoMigration())
                 .initialData(realm -> {
                     Cat cat = new Cat();
                     for(CatNames catName : CatNames.values()) {

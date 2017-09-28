@@ -22,18 +22,23 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import io.realm.DynamicRealm;
 import io.realm.FieldAttribute;
 import io.realm.RealmConfiguration;
+import io.realm.RealmList;
 import io.realm.RealmMigration;
 import io.realm.RealmModel;
 import io.realm.RealmObjectSchema;
+import io.realm.RealmResults;
 import io.realm.RealmSchema;
 
 /**
@@ -76,6 +81,9 @@ public class AutoMigration
         RealmSchema realmSchema = realm.getSchema();
         Set<RealmObjectSchema> initialObjectSchemas = realmSchema.getAll();
 
+        // first we must create any object schema that belongs to model class that is not part of the schema yet, to allow links.
+        List<RealmObjectSchema> createdObjectSchemas = new LinkedList<>();
+
         // first we must check for classes that are in the schema, but are not in the configuration.
         Set<String> modelClassNames = new LinkedHashSet<>();
         Map<String, Class<? extends RealmModel>> modelClassNameToClassMap = new LinkedHashMap<>();
@@ -89,29 +97,36 @@ public class AutoMigration
             schemaClassNames.add(objectSchema.getClassName()); // "Cat", requires `-keepnames public class * extends io.realm.RealmObject`
             schemaClassNameToObjectSchemaMap.put(objectSchema.getClassName(), objectSchema);
         }
+
+        // now we must check if the model contains classes that are not part of the schema.
+        for(String modelClassName : modelClassNames) {
+            if(!schemaClassNames.contains(modelClassName)) {
+                // the model class is not part of the schema, we must add it to the schema.
+                RealmObjectSchema objectSchema = realmSchema.create(modelClassName);
+                createdObjectSchemas.add(objectSchema);
+            }
+        }
+
+        // we must check if existing schema classes have changed fields, or if they were removed from the model.
         for(String objectClassName : schemaClassNames) {
             RealmObjectSchema objectSchema = schemaClassNameToObjectSchemaMap.get(objectClassName);
             if(modelClassNames.contains(objectClassName)) {
                 // the model was found in the schema, we must match their fields.
                 Class<? extends RealmModel> modelClass = modelClassNameToClassMap.get(objectClassName);
-                matchFields(objectSchema, modelClass);
+                matchFields(realmSchema, objectSchema, modelClass);
             } else {
                 // the model class was not part of the schema, so we must remove the object schema.
                 realmSchema.remove(objectClassName);
             }
         }
-        // now we must check if the model contains classes that are not part of the schema.
-        for(String modelClassName : modelClassNames) {
-            if(!schemaClassNames.contains(modelClassName)) {
-                // the model class is not part of the schema, we must add it.
-                RealmObjectSchema objectSchema = realmSchema.create(modelClassName);
-                Class<? extends RealmModel> modelClass = modelClassNameToClassMap.get(modelClassName);
-                matchFields(objectSchema, modelClass);
-            }
+        // now that we've set up our classes, we must also match the fields of newly created schema classes.
+        for(RealmObjectSchema createdObjectSchema : createdObjectSchemas) {
+            Class<? extends RealmModel> modelClass = modelClassNameToClassMap.get(createdObjectSchema.getClassName());
+            matchFields(realmSchema, createdObjectSchema, modelClass);
         }
     }
 
-    private void matchFields(RealmObjectSchema objectSchema, Class<? extends RealmModel> modelClass) {
+    private void matchFields(RealmSchema realmSchema, RealmObjectSchema objectSchema, Class<? extends RealmModel> modelClass) {
         Field[] allModelFields = modelClass.getDeclaredFields();
         Set<String> modelFieldNames = new LinkedHashSet<>(allModelFields.length);
         Map<String, Field> modelFieldNameToFieldMap = new LinkedHashMap<>(allModelFields.length);
@@ -127,16 +142,38 @@ public class AutoMigration
             }
         }
         for(String modelFieldName : modelFieldNames) {
+            Field field = modelFieldNameToFieldMap.get(modelFieldName);
+            if(Modifier.isStatic(field.getModifiers())) { // we must ignore static fields!
+                continue;
+            }
+            if(Modifier.isTransient(field.getModifiers())) { // transient fields are ignored.
+                continue;
+            }
+            // TODO: ensure that @Ignore is ignored.
             if(!schemaFieldNames.contains(modelFieldName)) {
                 // the schema does not contain the model's field, we must add this according to type!
-                Field field = modelFieldNameToFieldMap.get(modelFieldName);
                 Class<?> fieldType = field.getType();
-
                 if(isNonNullPrimitive(fieldType) || isPrimitiveObjectWrapper(fieldType) || isFieldRegularObjectType(fieldType)) {
                     objectSchema.addField(modelFieldName, fieldType);
                     matchMigratedField(objectSchema, modelFieldName, field);
                 } else {
-                    // TODO: RealmList<T> and RealmObject links
+                    if(fieldType == RealmResults.class) { // computed field (like @LinkingObjects), so this should be ignored.
+                        //noinspection UnnecessaryContinue
+                        continue;
+                    } else if(fieldType == RealmList.class) {
+                        // TODO: RealmList<T>
+                        //throw new UnsupportedOperationException("RealmList<T> field [" + modelFieldName + " :: " + field.getName() + " ] is not yet supported by auto-migration.");
+                    } else {
+                        if(!RealmModel.class.isAssignableFrom(fieldType)) {
+                            continue; // this is most likely an @Ignore field, let's just ignore it
+                        }
+                        String linkedObjectName = field.getType().getSimpleName();
+                        RealmObjectSchema linkedObjectSchema = realmSchema.get(linkedObjectName);
+                        if(linkedObjectSchema == null) {
+                            throw new IllegalStateException("The object schema [" + linkedObjectName + "] defined by field [" + modelFieldName + "] was not found in the schema!");
+                        }
+                        objectSchema.addRealmObjectField(field.getName(), linkedObjectSchema);
+                    }
                 }
             }
         }
