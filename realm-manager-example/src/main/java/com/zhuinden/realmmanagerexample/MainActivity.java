@@ -1,5 +1,6 @@
 package com.zhuinden.realmmanagerexample;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
@@ -34,6 +35,7 @@ public class MainActivity
 
     CatAdapter adapter;
 
+    @SuppressLint("NewAPI")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         realmManager = Injector.get().realmManager();
