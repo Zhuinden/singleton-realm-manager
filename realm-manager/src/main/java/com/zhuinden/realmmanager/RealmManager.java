@@ -24,7 +24,7 @@ import io.realm.Realm;
  *
  * It also allows obtaining the open thread-local instance without incrementing the reference count.
  */
-public class RealmManager implements Closeable {
+public class RealmManager {
     private final ThreadLocal<Realm> localRealms = new ThreadLocal<>();
 
     /**
@@ -73,18 +73,6 @@ public class RealmManager implements Closeable {
         if(Realm.getLocalInstanceCount(Realm.getDefaultConfiguration()) <= 0) {
             localRealms.set(null);
         }
-    }
-
-    /**
-     * Implements Closeable interface, delegates to {@link RealmManager#closeLocalInstance()}.
-     *
-     * Prefer that method instead if not using try-with-resources.
-     *
-     * @throws IllegalStateException if there is no open Realm.
-     */
-    @Override
-    public void close() {
-        closeLocalInstance();
     }
 
     private void checkDefaultConfiguration() {
