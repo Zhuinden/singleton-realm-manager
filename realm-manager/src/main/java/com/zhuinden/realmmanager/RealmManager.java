@@ -35,7 +35,8 @@ public class RealmManager {
     public Realm openLocalInstance() {
         checkDefaultConfiguration();
         Realm realm = Realm.getDefaultInstance(); // <-- maybe this should be a parameter
-        if(localRealms.get() == null) {
+        Realm localRealm = localRealms.get();
+        if(localRealm == null || localRealm.isClosed()) {
             localRealms.set(realm);
         }
         return realm;
@@ -49,7 +50,7 @@ public class RealmManager {
      */
     public Realm getLocalInstance() {
         Realm realm = localRealms.get();
-        if(realm == null) {
+        if(realm == null || realm.isClosed()) {
             throw new IllegalStateException(
                     "No open Realms were found on this thread.");
         }
@@ -64,7 +65,7 @@ public class RealmManager {
     public void closeLocalInstance() {
         checkDefaultConfiguration();
         Realm realm = localRealms.get();
-        if(realm == null) {
+        if(realm == null || realm.isClosed()) {
             throw new IllegalStateException(
                     "Cannot close a Realm that is not open.");
         }
